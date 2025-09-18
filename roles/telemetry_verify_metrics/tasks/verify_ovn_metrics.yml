@@ -1,0 +1,85 @@
+- name: Get ovn-northd metric services
+  ansible.builtin.shell: |
+    oc get svc -l service=ovn-northd,type=metrics -o name -n openstack
+  register: ovn_northd_metric
+  changed_when: false
+  when: '"ovn" in telemetry_verify_metrics_metric_sources_to_test'
+
+- name: Verify ovn-northd scrapeconfig exists
+  ansible.builtin.include_role:
+    name: common
+  vars:
+    common_cr_list:
+      - kind: scrapeconfigs.monitoring.rhobs
+        name: telemetry-ovn-northd
+  when:
+    - '"ovn" in telemetry_verify_metrics_metric_sources_to_test'
+    - ovn_northd_metric.stdout != ""
+
+- name: |
+    TEST Use openstack observabilityclient to verify ovn-northd metrics are stored in prometheus
+  vars:
+    ovn_northd_metrics:
+      - ovn_northd_status
+      - ovn_northd_pstream_open_total
+      - ovn_northd_stream_open_total
+      - ovn_northd_txn_incomplete_total
+      - ovn_northd_txn_success_total
+      - ovn_northd_txn_try_again_total
+      - ovn_northd_txn_unchanged_total
+  ansible.builtin.shell: |
+    {{ openstack_cmd }} metric show --disable-rbac {{ item }}
+  register: result
+  delay: 30
+  retries: 10
+  changed_when: false
+  until: result.rc == 0 and item in result.stdout
+  loop: "{{ ovn_northd_metrics }}"
+  when:
+    - '"ovn" in telemetry_verify_metrics_metric_sources_to_test'
+    - ovn_northd_metric.stdout != ""
+
+- name: Get ovn-controller metric services
+  ansible.builtin.shell: |
+    oc get svc -l service=ovn-controller-metrics,type=metrics -o name -n openstack
+  register: ovn_controller_metric
+  changed_when: false
+  when:
+    - '"ovn" in telemetry_verify_metrics_metric_sources_to_test'
+
+- name: Verify ovn-controller scrapeconfig exists
+  ansible.builtin.include_role:
+    name: common
+  vars:
+    common_cr_list:
+      - kind: scrapeconfigs.monitoring.rhobs
+        name: telemetry-ovn-controller
+  when:
+    - '"ovn" in telemetry_verify_metrics_metric_sources_to_test'
+    - ovn_controller_metric.stdout != ""
+
+- name: |
+    TEST Use openstack observabilityclient to verify ovn controller metrics are stored in prometheus
+  vars:
+    ovn_controller_metrics:
+      - ovnc_bridge_mappings
+      - ovnc_encap_ip
+      - ovnc_encap_type
+      - ovnc_sb_connection_method
+      - ovs_bridge_flow_count
+      - ovs_bridge_port_count
+      - ovs_dpdk_initialized
+      - ovs_memory_keys_total
+      - ovs_datapath_flows_total
+      - ovs_build_info
+  ansible.builtin.shell: |
+    {{ openstack_cmd }} metric show --disable-rbac {{ item }}
+  register: result
+  delay: 30
+  retries: 10
+  changed_when: false
+  until: result.rc == 0 and item in result.stdout and ":1981" in result.stdout
+  loop: "{{ ovn_controller_metrics }}"
+  when:
+    - '"ovn" in telemetry_verify_metrics_metric_sources_to_test'
+    - ovn_controller_metric.stdout != ""
